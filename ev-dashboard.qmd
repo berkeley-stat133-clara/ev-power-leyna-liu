@@ -1,5 +1,10 @@
 ---
 title: "EV Power Dashboard"
+author: "Leyna Liu"
 format: dashboard
 ---
 
+## Row {height=70%}
+
+```{r}
+#| title: ""
