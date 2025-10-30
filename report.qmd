@@ -8,23 +8,104 @@ format: typst
 ## **Part 0: libraries**
 
 ```{r}
-
+library(tidyverse)
+library(sf)
+library(rnaturalearth)
+library(lubridate)
+library(stringr)
 ```
 
 ## **Part 1:** **Defining Research Question**
 
-Chosen Question:
+Chosen Question: How has the share of renewable energy changed from 2021-2023 across states?
 
 ## **Part 2: Data Preparation and Cleaning**
 
 ```{r}
+# Open each data file and rename them:
+# Adding a new year column because eventually when I combine all these different years into one dataset, I am able to recognize in each row which year the observation belongs to. 
+renew_2021 <- read_csv("~/stat133/ev-power-leyna-liu/data/renew-use-2021.csv") |>
+    mutate(year = 2021)
+renew_2022 <- read_csv("~/stat133/ev-power-leyna-liu/data/renew-use-2022.csv") |>
+    mutate(year = 2022)
+renew_2023 <- read_csv("~/stat133/ev-power-leyna-liu/data/renew-use-2023.csv") |>
+    mutate(year = 2023)
+total_2021 <- read_csv("~/stat133/ev-power-leyna-liu/data/total-use-2021.csv") |>
+    mutate(year = 2021)
+total_2022 <- read_csv("~/stat133/ev-power-leyna-liu/data/total-use-2022.csv") |>
+    mutate(year = 2022)
+total_2023 <- read_csv("~/stat133/ev-power-leyna-liu/data/total-use-2023.csv") |>
+    mutate(year = 2023)
+```
 
+```{r}
+# Now, I am going to Standardize the column names, or basically just make sure all the column names are the same/consistent throughout all datasets 
+# So, I am going to make all column names lower case through all datasets
+# names(dataframe) -> outputs the names of all columns 
+# tolower(names(dataframe)) -> makes all the column names lowercase
+# names(dataframe) <- tolower(names(dataframe)): then assigning the lower case column names back to the original column names to save it back into the dataframe 
+names(renew_2021) <- tolower(names(renew_2021))
+names(renew_2022) <- tolower(names(renew_2022))
+names(renew_2023) <- tolower(names(renew_2023))
+names(total_2021) <- tolower(names(total_2021))
+names(total_2022) <- tolower(names(total_2022))
+names(total_2023) <- tolower(names(total_2023))
+```
+
+```{r}
+# Now that the column names are in lowercase, I will make sure all state names are in lower case too (in the State column), to make sure state names are consistent across all files
+renew_2021 <- renew_2021 |>
+    mutate(state = tolower(state))
+renew_2022 <- renew_2022 |>
+    mutate(state = tolower(state))
+renew_2023 <- renew_2023 |>
+    mutate(state = tolower(state))
+
+# Since, in the total_2021, total_2022, total_2023 datasets the state names are across the columns I can't use the tolower() function across all columns that would be way too tedious, so I will deal with them in Part 3, where I can use pivots.
+```
+
+```{r}
+# I noticed how in the total_2021, total_2022, total_2023 datasets, the Energy_Source column's cells have different spellings for each energy source (ex. Coal vs. ), so to make it all the same I will use strings.
+
+# Here, the str_replace() follows this format:
+# str_replace(dataset or column you want to change, what you want to change in that column or dataset, and what you want to change that word into)
+# In: "Natural Gas.*" -> the . is a wildcard meaning that it will output any character followed by gas, and the * means any amount, so together it means any amount of characters after gas
+total_2021 <- total_2021 |>
+    mutate(
+        energy_source = str_replace(energy_source, "Coal", "coal"),
+        energy_source = str_replace(energy_source, "Natural Gas.*", "natural gas"),
+        energy_source = str_replace(energy_source, "Petroleum.*", "petroleum"),
+        energy_source = str_replace(energy_source, "nuclear", "nuclear"),
+        energy_source = str_replace(energy_source, "total_renewable_energy", "total_renewable_energy")
+    )
+# Now, I will repeat this process with total_2022 and total_2023
+total_2022 <- total_2022 |>
+    mutate(
+        energy_source = str_replace(energy_source, "coal.*", "coal"),
+        energy_source = str_replace(energy_source, "Natural-Gas", "natural gas"),
+        energy_source = str_replace(energy_source, "petroleum.*", "petroleum"),
+        energy_source = str_replace(energy_source, "Nuclear.*", "nuclear"),
+        energy_source = str_replace(energy_source, "total_renewable.*", "total_renewable_energy")
+    )
+
+total_2023 <- total_2023 |>
+    mutate(
+        energy_source = str_replace(energy_source, "coal.*", "coal"),
+        energy_source = str_replace(energy_source, "Natural.*", "natural gas"),
+        energy_source = str_replace(energy_source, "petroleum.*", "petroleum"),
+        energy_source = str_replace(energy_source, "nuclear.*", "nuclear"),
+        energy_source = str_replace(energy_source, "total renewable.*", "total_renewable_energy")
+    )
 ```
 
 ## **Part 3: Joining / Pivoting Datasets for Analysis**
 
 ```{r}
+# In order to combine the different years (in total dataset) into one dataset, I first need to pivot the total datasets so that the columns are not years
 
+
+# Now, I will combine all the yearly files into single tables. The new year column I created in Part 2 with each year listed in each row will come in handy now. 
+ 
 ```
 
 ## **Part 4: Mapping Visualization**
