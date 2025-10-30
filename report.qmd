@@ -101,15 +101,145 @@ total_2023 <- total_2023 |>
 ## **Part 3: Joining / Pivoting Datasets for Analysis**
 
 ```{r}
-# In order to combine the different years (in total dataset) into one dataset, I first need to pivot the total datasets so that the columns are not years
+# Now, I will combine all the years into a single dataset. (The new year column I created in Part 2 with each year listed in each row will come in handy now to be able to distinguish what year the observations are from.)
+total_years_joined <- total_2021 |>
+    full_join(total_2022, by = "energy_source") |>
+    full_join(total_2023, by = "energy_source")
 
-
-# Now, I will combine all the yearly files into single tables. The new year column I created in Part 2 with each year listed in each row will come in handy now. 
- 
+# Since this is using the original total_2021, total_2022, total_2023 datasets, I need to pivot it, since the columns are each states. 
+total_years_pivoted <- pivot_longer(
+    total_years_joined,
+    cols = -c("energy_source"),
+    names_to = "states.year",
+    values_to = "count"
+)
+view(total_years_pivoted)
+# cols = -c("energy_source") -> because I want all the columns except energy_source and it would be too tedious to write each of them out, so I just "minus" energy_source
+# Since the original datasets total_2021, total_2022, total_2023 all have the same column names, when the columns of the same state names from the other datasets are joined onto total_2021, R automatically gives the state names different suffixes added to it.
+# Therefore, ak.x = year 2021, ak.y = year 2022, ak = year 2023
 ```
+
+```{r}
+# Now, I will also join renew datasets into one single renew dataset:
+renew_joined <- renew_2021 |>
+    full_join(renew_2022, by = c("state", "energy_source")) |>
+    full_join(renew_2023, by = c("state", "energy_source"))
+view(renew_joined)
+
+# Here, it is crucial that I have joined by both "state" and "energy_source" because both columns are matching keys in this case that are the same in all renew datasets. If I just match by "state" then it will take every row from 2021 for a given state and try to match it with every row from 2022 with the same state. (for ex. if there is 3 rows of ak in 2021 and 3 rows of ak in 2022 -> 3*3 = 9 rows after full_join)
+# But if I match with both state and energy source it will look for a match of the same state AND energy source for 2021 to 2022. (for ex. ak Biomass in 2021 matches with ak biomass in 2022)
+```
+
+The method I chose is to join the total-use datasets into a single total_years_joined datasets that combines all the years. I had to pivot it to make sure it was more legible. Then I did the same thing to the renew-use datasets. I combined all the years of renew-use into a single dataset. The reason I did this is so that later is it easier to make the map visualization, and I know I am trying to explore the question of renewable usage OVER TIME, so it would be to my advantage to group all the years together in a centralized dataset.
+
+```{r}
+# Now, I will create a new variable, which is percentage/ratio of renewable energy source out of total energy by year
+# First, I will pivot each year of total dataset
+total_2021_pivoted <- pivot_longer(total_2021, cols = -c(energy_source, year), names_to = "state", values_to = "count")
+
+total_2022_pivoted <- pivot_longer(total_2022, cols = -c(energy_source, year), names_to = "state", values_to = "count")
+
+total_2023_pivoted <- pivot_longer(total_2023, cols = -c(energy_source, year), names_to = "state", values_to = "count")
+
+# Then, I will create the total energy for each year
+total_energy_2021 <- total_2021_pivoted |>
+    group_by(state) |>
+    summarize(total_energy = sum(count))
+
+total_energy_2022 <- total_2022_pivoted |>
+    group_by(state) |>
+    summarize(total_energy = sum(count))
+
+total_energy_2023 <- total_2023_pivoted |>
+    group_by(state) |>
+    summarize(total_energy = sum(count))
+
+# Then, I will create the renewable energy per state per year
+# renewable_energy_count = count -> I renamed the count column to renewable_energy_count specifically because later when I do the calculations it will be easier and it would be confusing with two count columns (1 total count, 1 renewable count)
+renewable_2021 <- total_2021_pivoted |>
+    filter(energy_source == "total_renewable_energy") |>
+    select(state, renewable_energy_count = count)
+
+renewable_2022 <- total_2022_pivoted |>
+    filter(energy_source == "total_renewable_energy") |>
+    select(state, renewable_energy_count = count)
+
+renewable_2023 <- total_2023_pivoted |>
+    filter(energy_source == "total_renewable_energy") |>
+    select(state, renewable_energy_count = count)
+
+# Finally, we can calculate the percentage
+# Since we are looking for percentage of renewable energy out of total energy I multipled 100 to total_energy
+percentage_2021 <- total_energy_2021 |>
+    left_join(renewable_2021, by = "state") |>
+    mutate(ratio_percent = renewable_energy_count / total_energy * 100)
+
+percentage_2022 <- total_energy_2022 |>
+    left_join(renewable_2022, by = "state") |>
+    mutate(ratio_percent = renewable_energy_count / total_energy * 100)
+
+percentage_2023 <- total_energy_2023 |>
+    left_join(renewable_2023, by = "state") |>
+    mutate(ratio_percent = renewable_energy_count / total_energy * 100)
+
+view(percentage_2021)
+view(percentage_2022)
+view(percentage_2023)
+
+```
+
+Suprisingly, it seems like in 2021 South Dakota had the highest percentage of renewable energy usage at 34.87%. In 2022, again it is South Dakota with a percentage of 34.98%. In 2023, again South Dakota with 34.84%.
 
 ## **Part 4: Mapping Visualization**
 
 ```{r}
-
+# This creates the data that goes into geom_sf() later:
+united_states_map <- ne_states(country = "United States of America", returnclass = "sf")
+united_states_map
 ```
+
+```{r}
+# after doing view(united_states_map) you can see the state names under postal column AND the state names are in UPPER CASE
+# therefore, we have to alter our percentage_2021 to have state names in upper case too
+# then join the new percentage_2021 data with upper case states to the map with key "state" which corresponds to woe_name in the map
+percentage_2021 <- percentage_2021 |>
+    mutate(state = toupper(state))
+map_joined <- united_states_map |>
+    left_join(percentage_2021, by = c("postal" = "state"))
+
+# Now I will repeat this for every year
+percentage_2022 <- percentage_2022 |>
+    mutate(state = toupper(state))
+map_joined2 <- united_states_map |>
+    left_join(percentage_2022, by = c("postal" = "state"))
+
+percentage_2023 <- percentage_2023 |>
+    mutate(state = toupper(state))
+map_joined3 <- united_states_map |>
+    left_join(percentage_2023, by = c("postal" = "state"))
+```
+
+```{r}
+# now finally to create the map for 2021:
+map2021 <- ggplot() + geom_sf(data = united_states_map) + geom_sf(data = map_joined, aes(fill = ratio_percent)) + coord_sf(xlim = c(-130, -60), ylim = c(25, 50)) + labs(title = "Percentage of Renewable Energy Sources Used By State in 2021", fill = "Percentage of Renewables") + theme(panel.background = element_blank())
+
+map2021
+```
+
+```{r}
+# map for 2022:
+map2022 <- ggplot() + geom_sf(data = united_states_map) + geom_sf(data = map_joined2, aes(fill = ratio_percent)) + coord_sf(xlim = c(-130, -60), ylim = c(25, 50)) + labs(title = "Percentage of Renewable Energy Sources Used By State in 2022", fill = "Percentage of Renewables") + theme(panel.background = element_blank())
+
+map2022
+```
+
+```{r}
+# map for 2023:
+map2023 <- ggplot() + geom_sf(data = united_states_map) + geom_sf(data = map_joined3, aes(fill = ratio_percent)) + coord_sf(xlim = c(-130, -60), ylim = c(25, 50)) + labs(title = "Percentage of Renewable Energy Sources Used By State in 2023", fill = "Percentage of Renewables") + theme(panel.background = element_blank())
+
+map2023
+```
+
+## **Part 5: Final Deliverable **
+# Analysis
+The patterns I notice is that over time there seems to be a slight increase in Renewable Energy usage throughout the United States. However, the increase is so minimal it is almost non-existent. South Dakota does seem to have the highest percentage of Renewable Energy sources used. I expected California to be higher in Renewable Energy Usage, but it seems that California seems to have average percentages of Renewables over the years 2021 to 2023. My maps help to answer the main research question of: How has the share of renewable energy changed from 2021-2023 across states? This is because through the three seperate maps by years 2021, 2022, and 2023 one can see distinctly the differences in percentages of Renewables used across the states. From the map, it is evident that there is not drastic enough changes to be able to see the color gradients change that much. 
